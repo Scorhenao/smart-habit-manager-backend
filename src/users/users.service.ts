@@ -5,11 +5,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { RegisterUserResponseDto } from './dto/register-user-response.dto';
+import { LoginUserDto } from './dto/login-user.dto';
+import { LoginUserResponseDto } from './dto/login-user-response.dto';
+import { JwtStrategy } from 'src/common/auth/jwt.strategy';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User) private readonly userRepository: Repository<User>,
+    private jwtStrategy: JwtStrategy,
   ) {}
   async registerUser(
     registerUserDto: RegisterUserDto,
@@ -48,5 +52,24 @@ export class UsersService {
       },
       'User registered successfully',
     );
+  }
+  async loginUser(loginUserDto: LoginUserDto): Promise<LoginUserResponseDto> {
+    const { email, password } = loginUserDto;
+    const user = await this.userRepository.findOne({ where: [{ email }] });
+    if (!user) {
+      throw new Error('User not found');
+    }
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      throw new Error('Invalid password');
+    }
+
+    const token = await this.jwtStrategy.generateToken(user.id);
+
+    if (!token) {
+      throw new Error('Failed to generate token');
+    }
+
+    return new LoginUserResponseDto(200, token, 'User logged in successfully');
   }
 }
